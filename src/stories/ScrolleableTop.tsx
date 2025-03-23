@@ -39,7 +39,6 @@ export default class App extends React.Component {
           }}
         >
           <InfiniteScroll
-            dataLength={this.state.items.length}
             next={this.fetchMoreData}
             style={{ display: 'flex', flexDirection: 'column-reverse' }} //To put endMessage and loader to the top.
             inverse={true}

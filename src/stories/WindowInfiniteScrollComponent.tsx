@@ -24,7 +24,6 @@ export default class WindowInfiniteScrollComponent extends React.Component<
           hasMore={true}
           next={this.next}
           loader={<h1>Loading...</h1>}
-          dataLength={this.state.data.length}
         >
           {this.state.data.map((_, i) => (
             <div
