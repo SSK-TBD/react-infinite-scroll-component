@@ -31,7 +31,6 @@ export default class App extends React.Component {
         <hr />
         <div id="scrollableDiv" style={{ height: 300, overflow: 'auto' }}>
           <InfiniteScroll
-            dataLength={this.state.items.length}
             next={this.fetchMoreData}
             hasMore={true}
             loader={<h4>Loading...</h4>}

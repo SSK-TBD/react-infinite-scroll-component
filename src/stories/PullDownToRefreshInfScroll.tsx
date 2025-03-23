@@ -30,7 +30,6 @@ export default class App extends React.Component {
         <h1>demo: Pull down to refresh</h1>
         <hr />
         <InfiniteScroll
-          dataLength={this.state.items.length}
           next={this.fetchMoreData}
           hasMore={true}
           loader={<h4>Loading...</h4>}

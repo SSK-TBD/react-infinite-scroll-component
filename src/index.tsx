@@ -3,8 +3,16 @@ import { throttle } from 'throttle-debounce';
 import { ThresholdUnits, parseThreshold } from './utils/threshold';
 
 type Fn = () => any;
+
+/**
+ * PromiseLike represents a function or a promise.
+ */
+type PromiseLike<T, Args extends any[] = []> = (
+  ...args: Args
+) => T | Promise<T>;
+
 export interface Props {
-  next: Fn;
+  next: PromiseLike<unknown>;
   hasMore: boolean;
   children: ReactNode;
   loader: ReactNode;
@@ -21,15 +29,14 @@ export interface Props {
   pullDownToRefreshThreshold?: number;
   refreshFunction?: Fn;
   onScroll?: (e: MouseEvent) => any;
-  dataLength: number;
   initialScrollY?: number;
   className?: string;
 }
 
 interface State {
+  isLoading: boolean;
   showLoader: boolean;
   pullToRefreshThresholdBreached: boolean;
-  prevDataLength: number | undefined;
 }
 
 export default class InfiniteScroll extends Component<Props, State> {
@@ -37,9 +44,9 @@ export default class InfiniteScroll extends Component<Props, State> {
     super(props);
 
     this.state = {
+      isLoading: false,
       showLoader: false,
       pullToRefreshThresholdBreached: false,
-      prevDataLength: props.dataLength,
     };
 
     this.throttledOnScrollListener = throttle(150, this.onScrollListener).bind(
@@ -55,6 +62,7 @@ export default class InfiniteScroll extends Component<Props, State> {
   private el: HTMLElement | undefined | Window & typeof globalThis;
   private _infScroll: HTMLDivElement | undefined;
   private lastScrollTop = 0;
+  /** indicates action has already been triggered for the scroll */
   private actionTriggered = false;
   private _pullDown: HTMLDivElement | undefined;
 
@@ -67,15 +75,14 @@ export default class InfiniteScroll extends Component<Props, State> {
   // based on the height of the pull down element
   private maxPullDownDistance = 0;
 
-  componentDidMount() {
-    if (typeof this.props.dataLength === 'undefined') {
-      throw new Error(
-        `mandatory prop "dataLength" is missing. The prop is needed` +
-          ` when loading more content. Check README.md for usage`
-      );
-    }
+  /**
+   * A job which is currently loading the next data.
+   * Possibly undefined if no job is running.
+   * */
+  private currentJob: Promise<unknown> | undefined = undefined;
 
-    this._scrollableNode = this.getScrollableTarget();
+  public componentDidMount() {
+    this._scrollableNode = this.getScrollableNode();
     this.el = this.props.height
       ? this._infScroll
       : this._scrollableNode || window;
@@ -122,7 +129,7 @@ export default class InfiniteScroll extends Component<Props, State> {
     }
   }
 
-  componentWillUnmount() {
+  public componentWillUnmount() {
     if (this.el) {
       this.el.removeEventListener('scroll', this
         .throttledOnScrollListener as EventListenerOrEventListenerObject);
@@ -139,45 +146,12 @@ export default class InfiniteScroll extends Component<Props, State> {
     }
   }
 
-  componentDidUpdate(prevProps: Props) {
-    // do nothing when dataLength is unchanged
-    if (this.props.dataLength === prevProps.dataLength) return;
-
-    this.actionTriggered = false;
-
-    // update state when new data was sent in
-    this.setState({
-      showLoader: false,
-    });
+  public componentDidUpdate(_prevProps: Props): void {
+    // load initial data to make this component scrollable
+    if (!this.isFullyLoaded() && this.props.hasMore) {
+      this.scheduleNextLoad();
+    }
   }
-
-  static getDerivedStateFromProps(nextProps: Props, prevState: State) {
-    const dataLengthChanged = nextProps.dataLength !== prevState.prevDataLength;
-
-    // reset when data changes
-    if (dataLengthChanged) {
-      return {
-        ...prevState,
-        prevDataLength: nextProps.dataLength,
-      };
-    }
-    return null;
-  }
-
-  getScrollableTarget = () => {
-    if (this.props.scrollableTarget instanceof HTMLElement)
-      return this.props.scrollableTarget;
-    if (typeof this.props.scrollableTarget === 'string') {
-      return document.getElementById(this.props.scrollableTarget);
-    }
-    if (this.props.scrollableTarget === null) {
-      console.warn(`You are trying to pass scrollableTarget but it is null. This might
-        happen because the element may not have been added to DOM yet.
-        See https://github.com/ankeetmaini/react-infinite-scroll-component/issues/59 for more info.
-      `);
-    }
-    return null;
-  };
 
   onStart: EventListener = (evt: Event) => {
     if (this.lastScrollTop) return;
@@ -302,28 +276,20 @@ export default class InfiniteScroll extends Component<Props, State> {
       setTimeout(() => this.props.onScroll && this.props.onScroll(event), 0);
     }
 
-    const target =
-      this.props.height || this._scrollableNode
-        ? (event.target as HTMLElement)
-        : document.documentElement.scrollTop
-        ? document.documentElement
-        : document.body;
-
     // return immediately if the action has already been triggered,
     // prevents multiple triggers.
     if (this.actionTriggered) return;
 
-    const atBottom = this.props.inverse
-      ? this.isElementAtTop(target, this.props.scrollThreshold)
-      : this.isElementAtBottom(target, this.props.scrollThreshold);
+    const atPositionToLoadMore = this.isAtPositionToLoadMore();
 
     // call the `next` function in the props to trigger the next data fetch
-    if (atBottom && this.props.hasMore) {
+    if (atPositionToLoadMore && this.props.hasMore) {
       this.actionTriggered = true;
-      this.setState({ showLoader: true });
-      this.props.next && this.props.next();
+      const callback = () => (this.actionTriggered = false);
+      this.scheduleNextLoad(callback);
     }
 
+    const target = this.getScrollableTarget();
     this.lastScrollTop = target.scrollTop;
   };
 
@@ -387,5 +353,72 @@ export default class InfiniteScroll extends Component<Props, State> {
         </div>
       </div>
     );
+  }
+
+  private getScrollableNode = () => {
+    if (this.props.scrollableTarget instanceof HTMLElement)
+      return this.props.scrollableTarget;
+    if (typeof this.props.scrollableTarget === 'string') {
+      return document.getElementById(this.props.scrollableTarget);
+    }
+    if (this.props.scrollableTarget === null) {
+      console.warn(`You are trying to pass scrollableTarget but it is null. This might
+        happen because the element may not have been added to DOM yet.
+        See https://github.com/ankeetmaini/react-infinite-scroll-component/issues/59 for more info.
+      `);
+    }
+    return null;
+  };
+
+  /**
+   * Returns true if the contents are fully loaded so the target is actually scrollable.
+   * @private
+   */
+  private isFullyLoaded(): boolean {
+    const scrollHeight = this.getScrollableTarget().scrollHeight;
+    const clientHeight = this.getScrollableTarget().clientHeight;
+    return clientHeight < scrollHeight;
+  }
+
+  /**
+   * Returns the element which shows the scrollbar.
+   * @private
+   */
+  private getScrollableTarget(): HTMLElement {
+    return this.props.height || this._scrollableNode
+      ? (this.el as HTMLElement)
+      : document.documentElement.scrollTop
+      ? document.documentElement
+      : document.body;
+  }
+
+  /**
+   * Returns if the scroll position is at the position to load more data.
+   * @private
+   */
+  private isAtPositionToLoadMore(): boolean {
+    const target = this.getScrollableTarget();
+    return this.props.inverse
+      ? this.isElementAtTop(target, this.props.scrollThreshold)
+      : this.isElementAtBottom(target, this.props.scrollThreshold);
+  }
+
+  /**
+   * Schedules the next load.
+   * If there is already a job running, it will wait for it to finish, and then loads.
+   * @private
+   */
+  private scheduleNextLoad(callback: Fn | undefined = undefined): void {
+    const job = async () => {
+      this.setState({ showLoader: true, isLoading: true });
+      if (this.props.next) await this.props.next();
+      this.setState({ showLoader: false, isLoading: false });
+      if (callback) callback();
+    };
+    if (this.currentJob) {
+      this.currentJob = this.currentJob.then(job);
+    } else {
+      this.currentJob = job();
+    }
   }
 }

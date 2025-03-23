@@ -35,7 +35,6 @@ export default class App extends React.Component {
         <h1>demo: Infinite Scroll with fixed height</h1>
         <hr />
         <InfiniteScroll
-          dataLength={this.state.items.length}
           next={this.fetchMoreData}
           hasMore={this.state.hasMore}
           loader={<h4>Loading...</h4>}
