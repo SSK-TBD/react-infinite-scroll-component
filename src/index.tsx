@@ -34,7 +34,6 @@ export interface Props {
 }
 
 interface State {
-  isLoading: boolean;
   showLoader: boolean;
   pullToRefreshThresholdBreached: boolean;
 }
@@ -44,7 +43,6 @@ export default class InfiniteScroll extends Component<Props, State> {
     super(props);
 
     this.state = {
-      isLoading: false,
       showLoader: false,
       pullToRefreshThresholdBreached: false,
     };
@@ -149,7 +147,8 @@ export default class InfiniteScroll extends Component<Props, State> {
   public componentDidUpdate(_prevProps: Props): void {
     // load initial data to make this component scrollable
     if (!this.isFullyLoaded() && this.props.hasMore) {
-      this.scheduleNextLoad();
+      const callback = () => this.forceUpdate();
+      this.scheduleNextLoad(callback);
     }
   }
 
@@ -280,10 +279,10 @@ export default class InfiniteScroll extends Component<Props, State> {
     // prevents multiple triggers.
     if (this.actionTriggered) return;
 
-    const atPositionToLoadMore = this.isAtPositionToLoadMore();
+    const isAtPositionToLoadMore = this.isAtPositionToLoadMore();
 
     // call the `next` function in the props to trigger the next data fetch
-    if (atPositionToLoadMore && this.props.hasMore) {
+    if (isAtPositionToLoadMore && this.props.hasMore) {
       this.actionTriggered = true;
       const callback = () => (this.actionTriggered = false);
       this.scheduleNextLoad(callback);
@@ -410,9 +409,9 @@ export default class InfiniteScroll extends Component<Props, State> {
    */
   private scheduleNextLoad(callback: Fn | undefined = undefined): void {
     const job = async () => {
-      this.setState({ showLoader: true, isLoading: true });
+      this.setState({ showLoader: true });
       if (this.props.next) await this.props.next();
-      this.setState({ showLoader: false, isLoading: false });
+      this.setState({ showLoader: false });
       if (callback) callback();
     };
     if (this.currentJob) {
