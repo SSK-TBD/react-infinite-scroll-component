@@ -413,6 +413,7 @@ export default class InfiniteScroll extends Component<Props, State> {
       if (this.props.next) await this.props.next();
       this.setState({ showLoader: false });
       if (callback) callback();
+      this.currentJob = undefined;
     };
     if (this.currentJob) {
       this.currentJob = this.currentJob.then(job);
