@@ -2,12 +2,15 @@ name: react-infinite-scroll-component
 
 on: [push]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@50fbc622fc4ef5163becd7fab6573eac35f8462e # v1.2.0
 
       - name: install dependencies
         run: yarn
@@ -24,7 +27,7 @@ jobs:
       - name: ts type checks
         run: yarn ts-check
 
-      - uses: codecov/codecov-action@v1.0.3
+      - uses: codecov/codecov-action@d5749ba79ad0a1647198e63bc2f564d3ccf436a9 # v1.0.3
         with:
           token: ${{secrets.CODECOV_TOKEN}}
           file: ./coverage/lcov.info
