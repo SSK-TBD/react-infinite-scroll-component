@@ -24,7 +24,7 @@ jobs:
       - name: ts type checks
         run: yarn ts-check
 
-      - uses: codecov/codecov-action@d5749ba79ad0a1647198e63bc2f564d3ccf436a9 # v1.0.3
+      - uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5.5.4
         with:
           token: ${{secrets.CODECOV_TOKEN}}
-          file: ./coverage/lcov.info
+          files: ./coverage/lcov.info
